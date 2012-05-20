@@ -54,7 +54,7 @@ D_DB_USER="diaspora"
 
 D_DB_PASS="diaspora"
 
-D_RUBY_VERSION="1.9.2-p290"
+D_RUBY_VERSION="1.9.3-p125"
 
 ####                        INTERNAL VARS                        ####
 
@@ -179,7 +179,7 @@ install_or_use_ruby() {
   rvm use $D_RUBY_VERSION >/dev/null 2>&1
   if [ $? -ne 0 ] ; then
     echo "not ok"
-    rvm install $D_RUBY_VERSION >/dev/null 2>&1
+    rvm --force install $D_RUBY_VERSION
   else
     echo "ok"
   fi
@@ -202,7 +202,8 @@ load_rvmrc() {
 
   # load .rvmrc
   echo -n "loading .rvmrc ... "
-  rvm rvmrc load
+  source .rvmrc
+  #rvm rvmrc load
   if [ $? -eq 0 ] ; then
     echo "ok"
   else 
@@ -390,9 +391,8 @@ echo "bundling..."
 run_or_error "bundle install"
 echo ""
 
-echo "creating and migrating default database in config/database.yml. please wait..."
-run_or_error "rake db:create db:migrate --trace"
-             # I think we could use 'rake db:setup' here...
+echo "creating the default database specified in config/database.yml. please wait..."
+run_or_error "bundle exec rake db:schema:load_if_ruby db:structure:load_if_sql --trace"
 echo ""
 
 define GOODBYE_MSG <<'EOT'

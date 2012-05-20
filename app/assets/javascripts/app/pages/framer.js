@@ -10,59 +10,88 @@ app.pages.Framer = app.views.Base.extend({
 
   initialize : function(){
     this.model = app.frame
-    this.model.authorIsCurrentUser = function(){ return true }
+    if(!this.model.get("frame_name")) this.model.setFrameName()
 
-    this.model.bind("change", this.render, this)
-    this.model.bind("sync", this.navigateToShow, this)
+    this.model.authorIsCurrentUser = function(){ return true }
+    this.model.bind("change:frame_name", this.render, this)
+    this.model.bind("sync", this.navigateNext, this)
 
     this.framerControls = new app.views.framerControls({model : this.model})
   },
 
-  postView : function(){
-    return app.views.Post.showFactory(this.model)
+  unbind : function(){
+    this.model.off()
   },
 
-  navigateToShow : function(){
-    app.router.navigate(app.currentUser.expProfileUrl(), {trigger: true, replace: true})
+  postView : function(){
+    return new app.views.SmallFrame({model : this.model})
+  },
+
+  navigateNext : function(){
+    if(parent.location.pathname == '/new_bookmarklet') {
+      this.bookmarkletNavigation()
+    } else {
+      this.defaultNavigation()
+    }
+  },
+
+  bookmarkletNavigation : function() {
+    parent.close()
+  },
+
+  defaultNavigation : function() {
+    var url = app.currentUser.expProfileUrl()
+    app.router.navigate(url, {trigger: true, replace: true})
   }
-})
+});
 
 app.views.framerControls = app.views.Base.extend({
   templateName : 'framer-controls',
 
   events : {
-    "click button.done" : "saveFrame"
+    "click input.done" : "saveFrame",
+    "click input.back" : "editFrame",
+    "change input" : "setFormAttrs"
   },
 
-  subviews : {
-    ".template-picker" : 'templatePicker'
+  subviews:{
+    ".template-picker":'templatePicker',
+    ".aspect-selector":"aspectsDropdown",
+    ".service-selector":"servicesSelector"
+  },
+
+  formAttrs : {
+    "input.mood:checked" : "frame_name",
+    "input.aspect_ids" : "aspect_ids[]",
+    "input.services" : "services[]"
   },
 
   initialize : function(){
-    this.templatePicker = new app.views.TemplatePicker({ model: this.model })
+    this.aspectsDropdown = new app.views.AspectsDropdown({model:this.model});
+    this.servicesSelector = new app.views.ServicesSelector({model:this.model});
+  },
+
+  presenter : function() {
+    var selectedFrame = this.model.get("frame_name")
+      , templates =_.union(app.models.Post.frameMoods, _.without(app.models.Post.legacyTemplateNames, ["status", "status-with-photo-backdrop", "photo-backdrop", "activity-streams-photo", "note"])) //subtract re-implemented templates
+    return _.extend(this.defaultPresenter(), {
+      templates :_.map(templates, function(template) {
+        return {
+          name : template,
+          checked : selectedFrame === template
+        }
+      })
+    })
   },
 
   saveFrame : function(){
-    this.$('button').prop('disabled', 'disabled')
-    this.$('button').addClass('disabled')
-    // this is gross hack to make this action work in the iframe version and not iframe version.
-    var callback = {}
-    var parentDoc = parent;
-    var parentPath = parentDoc.location.pathname
+    this.$('button').prop('disabled', 'disabled').addClass('disabled')
+    this.setFormAttrs()
+    this.model.save()
+  },
 
-    if(parentPath == '/new_bookmarklet'){
-      callback.success = function(){ parentDoc.close() }
-    } else if(parentPath != '/framer'){
-      callback.success = function(){ parentDoc.goToCurrentUserProfile() }
-    } else{
-      // do nothing, and let the navigate event fire
-    }
-
-    this.model.save({}, callback)
+  editFrame : function(){
+    app.router.renderPage(function(){return new app.pages.Composer({model : app.frame})})
+    app.router.navigate("/posts/new")
   }
 });
-
-//crazy hack for model publisher.
-function goToCurrentUserProfile(){
-  location = "/people/" + app.currentUser.get("guid")
-};
